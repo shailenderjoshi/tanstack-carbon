@@ -1,42 +1,48 @@
 import { useEffect } from 'react';
 
 /**
- * Custom hook to close overflow menu when scrolling occurs
- * Waits for .cds--data-table-content element to exist before adding listener
+ * Custom hook to close overflow menu when scrolling occurs.
+ * Uses a MutationObserver to wait for .cds--data-table-content to appear
+ * (it may not exist at mount time when the table is in a loading state).
  */
 const useMenuCloseOnScroll = (tableRef) => {
   useEffect(() => {
-    let tblContainer = null;
+    let scrollTarget = null;
 
     const handleScroll = () => {
-      const openMenu = document.querySelector('button.cds--overflow-menu--open');
-      if (openMenu && tblContainer) {
-        tblContainer.click();
+      const openMenu = document.querySelector(
+        'button.cds--overflow-menu--open'
+      );
+      if (openMenu) {
+        openMenu.click();
       }
     };
 
-    const observer = new MutationObserver(() => {
-      const targetDiv = tableRef.current;
-
-      if (targetDiv) {
-        tblContainer = targetDiv.querySelector('.cds--data-table-content');
-        if (tblContainer) {
-          tblContainer.addEventListener('scroll', handleScroll);
+    const attach = () => {
+      const el = tableRef.current?.querySelector('.cds--data-table-content');
+      if (el && el !== scrollTarget) {
+        if (scrollTarget) {
+          scrollTarget.removeEventListener('scroll', handleScroll);
         }
-
-        observer.disconnect();
+        scrollTarget = el;
+        scrollTarget.addEventListener('scroll', handleScroll);
       }
-    });
+    };
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    // Try immediately in case the table is already rendered
+    attach();
+
+    // Watch for .cds--data-table-content being added to the DOM
+    // (e.g. after loading state resolves)
+    const observer = new MutationObserver(attach);
+    if (tableRef.current) {
+      observer.observe(tableRef.current, { childList: true, subtree: true });
+    }
 
     return () => {
       observer.disconnect();
-      if (tblContainer) {
-        tblContainer.removeEventListener('scroll', handleScroll);
+      if (scrollTarget) {
+        scrollTarget.removeEventListener('scroll', handleScroll);
       }
     };
   }, [tableRef]);

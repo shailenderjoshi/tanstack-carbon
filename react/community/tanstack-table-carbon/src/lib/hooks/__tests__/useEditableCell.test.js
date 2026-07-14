@@ -15,9 +15,27 @@ let mockCells;
 beforeEach(() => {
   // NOTE: Create mock DOM structure
   mockCells = [
-    { tabIndex: -1, focus: vi.fn(), blur: vi.fn(), closest: vi.fn() },
-    { tabIndex: -1, focus: vi.fn(), blur: vi.fn(), closest: vi.fn() },
-    { tabIndex: -1, focus: vi.fn(), blur: vi.fn(), closest: vi.fn() },
+    {
+      tabIndex: -1,
+      focus: vi.fn(),
+      blur: vi.fn(),
+      closest: vi.fn(),
+      querySelector: vi.fn(() => null),
+    },
+    {
+      tabIndex: -1,
+      focus: vi.fn(),
+      blur: vi.fn(),
+      closest: vi.fn(),
+      querySelector: vi.fn(() => null),
+    },
+    {
+      tabIndex: -1,
+      focus: vi.fn(),
+      blur: vi.fn(),
+      closest: vi.fn(),
+      querySelector: vi.fn(() => null),
+    },
   ];
 
   mockRows = [
@@ -33,6 +51,7 @@ beforeEach(() => {
   };
 
   const mockTable = {
+    closest: vi.fn(() => null),
     querySelector: vi.fn((selector) => {
       if (selector === 'tbody') {
         return mockTableBody;
@@ -40,6 +59,10 @@ beforeEach(() => {
       if (selector === 'td[tabindex="0"]') {
         return mockCells.find((cell) => cell.tabIndex === 0) || null;
       }
+      if (selector === 'tbody tr:first-child td') {
+        return mockCells[0];
+      }
+
       return null;
     }),
     querySelectorAll: vi.fn((selector) => {
@@ -66,7 +89,8 @@ beforeEach(() => {
       return null;
     });
     cell.previousElementSibling = index > 0 ? mockCells[index - 1] : null;
-    cell.nextElementSibling = index < mockCells.length - 1 ? mockCells[index + 1] : null;
+    cell.nextElementSibling =
+      index < mockCells.length - 1 ? mockCells[index + 1] : null;
     cell.parentNode = { children: mockCells };
   });
 
@@ -176,7 +200,11 @@ describe('useEditableCell - handleFocusChange', () => {
       result.current.handleFocusChange(mockEvent);
     });
 
-    expect(mockCells.every((cell) => cell.tabIndex === -1)).toBe(true);
+    // NOTE: ensureTabEntry sets mockCells[0] as the tab entry point on mount;
+    // a focus event outside the table body should not change cells[1] or cells[2].
+    expect(mockCells[1].tabIndex).toBe(-1);
+    expect(mockCells[2].tabIndex).toBe(-1);
+    expect(mockCells[0].focus).not.toHaveBeenCalled();
   });
 
   it('should not change focus when editing', () => {
@@ -194,7 +222,8 @@ describe('useEditableCell - handleFocusChange', () => {
       result.current.handleFocusChange(mockEvent);
     });
 
-    expect(mockCells[0].tabIndex).toBe(-1);
+    // NOTE: ensureTabEntry set cell[0].tabIndex=0 on mount before editing started
+    expect(mockCells[0].tabIndex).toBe(0);
     expect(mockCells[0].focus).not.toHaveBeenCalled();
   });
 
@@ -217,6 +246,8 @@ describe('useEditableCell - handleKeyDownActiveCell - Arrow Navigation', () => {
   it('should navigate left with ArrowLeft', () => {
     const { result } = renderHook(() => useEditableCell(tableContainerRef));
 
+    // NOTE: Reset cell[0] so cell[1] is the only active cell
+    mockCells[0].tabIndex = -1;
     // NOTE: Set middle cell as active
     mockCells[1].tabIndex = 0;
 
@@ -276,6 +307,8 @@ describe('useEditableCell - handleKeyDownActiveCell - Arrow Navigation', () => {
     const { result } = renderHook(() => useEditableCell(tableContainerRef));
 
     mockCells[2].tabIndex = 0;
+    // NOTE: Reset cell[0] so cell[2] is the only active cell
+    mockCells[0].tabIndex = -1;
 
     const mockEvent = {
       code: 'ArrowRight',
@@ -294,9 +327,24 @@ describe('useEditableCell - handleKeyDownActiveCell - Arrow Navigation', () => {
 
     // NOTE: Create second row
     const secondRowCells = [
-      { tabIndex: -1, focus: vi.fn(), closest: vi.fn(), parentNode: { children: [] } },
-      { tabIndex: 0, focus: vi.fn(), closest: vi.fn(), parentNode: { children: [] } },
-      { tabIndex: -1, focus: vi.fn(), closest: vi.fn(), parentNode: { children: [] } },
+      {
+        tabIndex: -1,
+        focus: vi.fn(),
+        closest: vi.fn(),
+        parentNode: { children: [] },
+      },
+      {
+        tabIndex: 0,
+        focus: vi.fn(),
+        closest: vi.fn(),
+        parentNode: { children: [] },
+      },
+      {
+        tabIndex: -1,
+        focus: vi.fn(),
+        closest: vi.fn(),
+        parentNode: { children: [] },
+      },
     ];
 
     const secondRow = {
@@ -362,9 +410,24 @@ describe('useEditableCell - handleKeyDownActiveCell - Arrow Navigation', () => {
 
     // NOTE: Create second row
     const secondRowCells = [
-      { tabIndex: -1, focus: vi.fn(), closest: vi.fn(), parentNode: { children: [] } },
-      { tabIndex: -1, focus: vi.fn(), closest: vi.fn(), parentNode: { children: [] } },
-      { tabIndex: -1, focus: vi.fn(), closest: vi.fn(), parentNode: { children: [] } },
+      {
+        tabIndex: -1,
+        focus: vi.fn(),
+        closest: vi.fn(),
+        parentNode: { children: [] },
+      },
+      {
+        tabIndex: -1,
+        focus: vi.fn(),
+        closest: vi.fn(),
+        parentNode: { children: [] },
+      },
+      {
+        tabIndex: -1,
+        focus: vi.fn(),
+        closest: vi.fn(),
+        parentNode: { children: [] },
+      },
     ];
 
     const secondRow = {
@@ -372,6 +435,8 @@ describe('useEditableCell - handleKeyDownActiveCell - Arrow Navigation', () => {
       previousElementSibling: mockRows[0],
       nextElementSibling: null,
     };
+    // NOTE: Reset cell[0] so cell[1] is the only active cell
+    mockCells[0].tabIndex = -1;
 
     mockRows[0].nextElementSibling = secondRow;
     mockCells[1].tabIndex = 0;
@@ -430,7 +495,31 @@ describe('useEditableCell - handleKeyDownActiveCell - Special Keys', () => {
       result.current.handleKeyDownActiveCell(mockEvent);
     });
 
-    expect(mockCells[0].tabIndex).toBe(-1);
+    // NOTE: ensureTabEntry restores cell[0] as tab entry after removeActiveCell
+    expect(mockCells[0].tabIndex).toBe(0);
+  });
+
+  it('should focus overflow menu button directly when Tab is pressed and next sibling has one', () => {
+    const { result } = renderHook(() => useEditableCell(tableContainerRef));
+
+    mockCells[0].tabIndex = 0;
+
+    const mockOverflowBtn = { focus: vi.fn() };
+    mockCells[1].querySelector = vi.fn(() => mockOverflowBtn);
+
+    const mockEvent = {
+      code: 'Tab',
+      preventDefault: vi.fn(),
+    };
+
+    act(() => {
+      result.current.handleKeyDownActiveCell(mockEvent);
+    });
+
+    expect(mockEvent.preventDefault).toHaveBeenCalled();
+    // NOTE: ensureTabEntry restores cell[0] as tab entry after removeActiveCell
+    expect(mockCells[0].tabIndex).toBe(0);
+    expect(mockOverflowBtn.focus).toHaveBeenCalled();
   });
 
   it('should handle Enter key', () => {
@@ -453,6 +542,9 @@ describe('useEditableCell - handleKeyDownActiveCell - Special Keys', () => {
 
   it('should not handle keys when no active cell', () => {
     const { result } = renderHook(() => useEditableCell(tableContainerRef));
+
+    // NOTE: Reset the tab entry so getActiveCell() returns null
+    mockCells[0].tabIndex = -1;
 
     const mockEvent = {
       code: 'ArrowLeft',
@@ -486,6 +578,30 @@ describe('useEditableCell - handleKeyDownActiveCell - Special Keys', () => {
     expect(mockEvent.preventDefault).not.toHaveBeenCalled();
     expect(mockCells[0].tabIndex).toBe(0);
   });
+
+  it('should not handle arrow keys when an overflow menu is open inside data-floating-menu-container', () => {
+    // Simulate Carbon portal: ul.cds--overflow-menu-options--open lives in the
+    // data-floating-menu-container ancestor, not inside tableContainerRef.
+    const openMenuList = document.createElement('ul');
+    openMenuList.className = 'cds--overflow-menu-options--open';
+
+    const floatingContainer = document.createElement('div');
+    floatingContainer.setAttribute('data-floating-menu-container', '');
+    floatingContainer.appendChild(openMenuList);
+
+    // tableContainerRef.current.closest() walks up to floatingContainer
+    tableContainerRef.current.closest = vi.fn((selector) =>
+      selector === '[data-floating-menu-container]' ? floatingContainer : null
+    );
+
+    const { result } = renderHook(() => useEditableCell(tableContainerRef));
+    mockCells[0].tabIndex = 0;
+
+    const mockEvent = { code: 'ArrowDown', preventDefault: vi.fn() };
+    act(() => result.current.handleKeyDownActiveCell(mockEvent));
+
+    expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+  });
 });
 
 describe('useEditableCell - Edge Cases', () => {
@@ -495,7 +611,10 @@ describe('useEditableCell - Edge Cases', () => {
 
     expect(() => {
       act(() => {
-        result.current.handleKeyDownActiveCell({ code: 'ArrowLeft', preventDefault: vi.fn() });
+        result.current.handleKeyDownActiveCell({
+          code: 'ArrowLeft',
+          preventDefault: vi.fn(),
+        });
       });
     }).not.toThrow();
   });
@@ -512,7 +631,9 @@ describe('useEditableCell - Edge Cases', () => {
 
     expect(() => {
       act(() => {
-        result.current.handleFocusChange({ target: document.createElement('div') });
+        result.current.handleFocusChange({
+          target: document.createElement('div'),
+        });
       });
     }).not.toThrow();
   });

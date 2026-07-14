@@ -102,7 +102,8 @@ const FilterSidePanel = ({
     <div
       className={`${styles.filterSidePanel} ${open ? styles.open : ''}`}
       style={{ width: `${width}px` }}
-      data-filter-panel="true">
+      data-filter-panel="true"
+      inert={!open ? '' : undefined}>
       <div className={styles.sidePanelHeader}>
         <div className={styles.headerText}>
           <div className={styles.closePanelBtn}>

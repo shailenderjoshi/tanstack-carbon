@@ -1,198 +1,410 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
 import {
   createSelectionColumn,
   createExpandColumn,
   addExpandColumn,
-  enhanceColumnsWithSmartFiltering,
   addSelectionColumn,
+  enhanceColumnsWithSmartFiltering,
 } from '../columnHelpers';
 
-vi.mock('@carbon/icons-react', () => ({
-  ChevronRight: ({ size, style }) => (
-    <div data-testid="chevron-right" data-size={String(size)} data-transform={style?.transform} />
-  ),
-}));
-
 vi.mock('../../components/selectionCell', () => ({
-  SelectionHeader: ({ table, isCheckbox }) => (
+  SelectionHeader: ({ _table, isCheckbox, tableId }) => (
     <div
       data-testid="selection-header"
-      data-table={table ? 'present' : 'missing'}
-      data-is-checkbox={String(Boolean(isCheckbox))}
+      data-checkbox={isCheckbox}
+      data-tableid={tableId}
     />
   ),
-  SelectionCell: ({ row, isCheckbox, isRadio }) => (
+  SelectionCell: ({ _row, isCheckbox, isRadio, tableId }) => (
     <div
       data-testid="selection-cell"
-      data-row-id={row?.id}
-      data-is-checkbox={String(Boolean(isCheckbox))}
-      data-is-radio={String(Boolean(isRadio))}
+      data-checkbox={isCheckbox}
+      data-radio={isRadio}
+      data-tableid={tableId}
     />
   ),
 }));
 
-describe('columnHelpers', () => {
-  it('creates selection column for checkbox and radio modes', () => {
-    const checkboxColumn = createSelectionColumn(true, false);
-    const radioColumn = createSelectionColumn(false, true);
+vi.mock('@carbon/icons-react', () => ({
+  ChevronRight: ({ size, className }) => (
+    <svg data-testid="chevron" data-size={size} className={className} />
+  ),
+}));
 
-    expect(checkboxColumn.id).toBe('select');
-    expect(checkboxColumn.enableSorting).toBe(false);
-    expect(checkboxColumn.enableColumnFilter).toBe(false);
+vi.mock('../columnHelpers.module.scss', () => ({
+  default: {
+    expandButton: 'expandButton',
+    expandIcon: 'expandIcon',
+    expandIconExpanded: 'expandIconExpanded',
+    expandIconCollapsed: 'expandIconCollapsed',
+  },
+}));
 
-    render(
-      <>
-        {checkboxColumn.header({ table: {} })}
-        {checkboxColumn.cell({ row: { id: 'row-1' } })}
-        {radioColumn.cell({ row: { id: 'row-2' } })}
-      </>
-    );
+const makeRow = (id = 'row-1', isExpanded = false) => ({
+  id,
+  getIsExpanded: vi.fn(() => isExpanded),
+});
 
-    expect(screen.getByTestId('selection-header')).toHaveAttribute('data-is-checkbox', 'true');
-    expect(screen.getAllByTestId('selection-cell')[0]).toHaveAttribute('data-row-id', 'row-1');
-    expect(screen.getAllByTestId('selection-cell')[0]).toHaveAttribute('data-is-checkbox', 'true');
-    expect(screen.getAllByTestId('selection-cell')[0]).toHaveAttribute('data-is-radio', 'false');
-    expect(screen.getAllByTestId('selection-cell')[1]).toHaveAttribute('data-is-checkbox', 'false');
-    expect(screen.getAllByTestId('selection-cell')[1]).toHaveAttribute('data-is-radio', 'true');
+afterEach(() => {
+  cleanup();
+});
+
+describe('createSelectionColumn', () => {
+  it('returns a column definition with id="select"', () => {
+    const col = createSelectionColumn(true, false, 'tbl-1');
+    expect(col.id).toBe('select');
+    expect(col.size).toBe(48);
+    expect(col.enableSorting).toBe(false);
+    expect(col.enableColumnFilter).toBe(false);
   });
 
-  it('creates expand column and handles header and row toggle actions', () => {
-    const toggleRow = vi.fn();
+  it('renders SelectionHeader via header function', () => {
+    const col = createSelectionColumn(true, false, 'tbl-1');
+    const { render, screen } = require('@testing-library/react');
+    render(col.header({ table: {} }));
+    expect(screen.getByTestId('selection-header')).toBeInTheDocument();
+  });
+
+  it('renders SelectionCell via cell function', () => {
+    const col = createSelectionColumn(false, true, 'tbl-1');
+    const { render, screen } = require('@testing-library/react');
+    render(col.cell({ row: makeRow() }));
+    expect(screen.getByTestId('selection-cell')).toBeInTheDocument();
+  });
+});
+
+describe('createExpandColumn', () => {
+  it('returns a column definition with id="expand"', () => {
+    const col = createExpandColumn(vi.fn(), vi.fn(), false);
+    expect(col.id).toBe('expand');
+    expect(col.enableSorting).toBe(false);
+    expect(col.enableColumnFilter).toBe(false);
+  });
+
+  it('header button calls toggleAllRows on click', () => {
+    const { render, screen, fireEvent } = require('@testing-library/react');
     const toggleAllRows = vi.fn();
-
-    const expandedColumn = createExpandColumn(toggleRow, toggleAllRows, true);
-    const collapsedColumn = createExpandColumn(toggleRow, toggleAllRows, false);
-
-    expect(expandedColumn.id).toBe('expand');
-    expect(expandedColumn.enableSorting).toBe(false);
-    expect(expandedColumn.enableColumnFilter).toBe(false);
-
-    render(
-      <>
-        {expandedColumn.header()}
-        {expandedColumn.cell({
-          row: {
-            id: 'row-1',
-            getIsExpanded: () => true,
-          },
-        })}
-        {collapsedColumn.cell({
-          row: {
-            id: 'row-2',
-            getIsExpanded: () => false,
-          },
-        })}
-      </>
-    );
-
-    const buttons = screen.getAllByRole('button');
-    fireEvent.click(buttons[0]);
-    fireEvent.click(buttons[1]);
-    fireEvent.click(buttons[2]);
-
+    const col = createExpandColumn(vi.fn(), toggleAllRows, false);
+    render(col.header());
+    fireEvent.click(screen.getByRole('button'));
     expect(toggleAllRows).toHaveBeenCalled();
-    expect(toggleRow).toHaveBeenCalledWith('row-1');
-    expect(toggleRow).toHaveBeenCalledWith('row-2');
-    expect(screen.getByLabelText('Collapse all rows')).toBeInTheDocument();
-    expect(screen.getByLabelText('Collapse row')).toBeInTheDocument();
-    expect(screen.getByLabelText('Expand row')).toBeInTheDocument();
   });
 
-  it('adds expand column in first, last, and afterSelection positions', () => {
-    const baseColumns = [{ id: 'selection' }, { id: 'name' }];
-    const expansion = {
-      toggleRow: vi.fn(),
-      toggleAllRows: vi.fn(),
-      isAllExpanded: false,
-    };
-
-    expect(addExpandColumn(baseColumns, null)).toBe(baseColumns);
-
-    const firstColumns = addExpandColumn(baseColumns, expansion, 'first');
-    const lastColumns = addExpandColumn(baseColumns, expansion, 'last');
-    const afterSelectionColumns = addExpandColumn(baseColumns, expansion, 'afterSelection', true);
-    const afterSelectionWithoutSelection = addExpandColumn(
-      baseColumns,
-      expansion,
-      'afterSelection',
-      false
+  it('header button has correct aria-label when not all expanded', () => {
+    const { render, screen } = require('@testing-library/react');
+    const col = createExpandColumn(vi.fn(), vi.fn(), false);
+    render(col.header());
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'aria-label',
+      'Expand all rows'
     );
-
-    expect(firstColumns[0].id).toBe('expand');
-    expect(lastColumns[lastColumns.length - 1].id).toBe('expand');
-    expect(afterSelectionColumns[0].id).toBe('selection');
-    expect(afterSelectionColumns[1].id).toBe('expand');
-    expect(afterSelectionWithoutSelection[0].id).toBe('expand');
   });
 
-  it('enhances columns with smart filtering and preserves existing filterFn', () => {
-    const columns = [
-      {
-        id: 'existing',
-        filterFn: vi.fn(() => true),
-      },
-      {
-        id: 'formatted-string',
-        cell: ({ getValue }) => `Value: ${getValue()}`,
-      },
-      {
-        id: 'formatted-object',
-        cell: () => <span>Rendered Element</span>,
-      },
-      {
-        id: 'throws',
-        cell: () => {
-          throw new Error('format failure');
-        },
-      },
-      {
-        id: 'plain',
-      },
-    ];
+  it('header button has correct aria-label when all expanded', () => {
+    const { render, screen } = require('@testing-library/react');
+    const col = createExpandColumn(vi.fn(), vi.fn(), true);
+    render(col.header());
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'aria-label',
+      'Collapse all rows'
+    );
+  });
 
-    const enhanced = enhanceColumnsWithSmartFiltering(columns);
-    const row = {
-      getValue: (columnId) => {
-        if (columnId === 'formatted-string') {
-          return 'abc123';
-        }
-        if (columnId === 'formatted-object') {
-          return 'raw-object';
-        }
-        if (columnId === 'throws') {
-          return 'safe-raw';
-        }
-        return 'plain';
-      },
+  it('cell button calls toggleRow with row.id on click', () => {
+    const { render, screen, fireEvent } = require('@testing-library/react');
+    const toggleRow = vi.fn();
+    const col = createExpandColumn(toggleRow, vi.fn(), false);
+    render(col.cell({ row: makeRow('row-42') }));
+    fireEvent.click(screen.getByRole('button'));
+    expect(toggleRow).toHaveBeenCalledWith('row-42');
+  });
+
+  it('cell button aria-label reflects expanded state', () => {
+    const { render, screen } = require('@testing-library/react');
+    const col = createExpandColumn(vi.fn(), vi.fn(), false);
+    render(col.cell({ row: makeRow('r1', true) }));
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'aria-label',
+      'Collapse row'
+    );
+  });
+});
+
+describe('addExpandColumn', () => {
+  const expansion = {
+    toggleRow: vi.fn(),
+    toggleAllRows: vi.fn(),
+    isAllExpanded: false,
+  };
+  const columns = [{ id: 'a' }, { id: 'b' }];
+
+  it('returns original columns when expansion is null', () => {
+    expect(addExpandColumn(columns, null)).toBe(columns);
+  });
+
+  it('adds expand column at the start by default', () => {
+    const result = addExpandColumn(columns, expansion);
+    expect(result[0].id).toBe('expand');
+    expect(result).toHaveLength(3);
+  });
+
+  it('adds expand column at the end when position="last"', () => {
+    const result = addExpandColumn(columns, expansion, 'last');
+    expect(result[result.length - 1].id).toBe('expand');
+  });
+
+  it('adds expand column after selection when position="afterSelection" and hasSelection=true', () => {
+    const cols = [{ id: 'select' }, { id: 'name' }];
+    const result = addExpandColumn(cols, expansion, 'afterSelection', true);
+    expect(result[0].id).toBe('select');
+    expect(result[1].id).toBe('expand');
+    expect(result[2].id).toBe('name');
+  });
+
+  it('falls back to first position when position="afterSelection" but hasSelection=false', () => {
+    const result = addExpandColumn(columns, expansion, 'afterSelection', false);
+    expect(result[0].id).toBe('expand');
+  });
+});
+
+describe('addSelectionColumn', () => {
+  it('returns original columns when selectionType is null', () => {
+    const cols = [{ id: 'name' }];
+    expect(addSelectionColumn(cols, null)).toBe(cols);
+  });
+
+  it('prepends selection column for checkbox type', () => {
+    const cols = [{ id: 'name' }];
+    const result = addSelectionColumn(cols, 'checkbox', 'tbl-1');
+    expect(result[0].id).toBe('select');
+    expect(result).toHaveLength(2);
+  });
+
+  it('prepends selection column for radio type', () => {
+    const cols = [{ id: 'name' }];
+    const result = addSelectionColumn(cols, 'radio', 'tbl-1');
+    expect(result[0].id).toBe('select');
+  });
+});
+
+describe('enhanceColumnsWithSmartFiltering', () => {
+  it('returns column unchanged when filterFn already defined', () => {
+    const col = { id: 'a', filterFn: vi.fn() };
+    const result = enhanceColumnsWithSmartFiltering([col]);
+    expect(result[0]).toBe(col);
+  });
+
+  it('returns column unchanged when no filterVariant and no cell formatter', () => {
+    const col = { id: 'a' };
+    const result = enhanceColumnsWithSmartFiltering([col]);
+    expect(result[0]).toBe(col);
+  });
+
+  describe('dateRange filterFn', () => {
+    const col = {
+      id: 'date',
+      accessorKey: 'date',
+      meta: { filterVariant: 'dateRange' },
     };
+    const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
 
-    expect(enhanced[0]).toBe(columns[0]);
-    expect(enhanced[4]).toBe(columns[4]);
+    it('returns true when filterValue is null', () => {
+      expect(enhanced.filterFn({}, 'date', null)).toBe(true);
+    });
 
-    expect(enhanced[1].filterFn(row, 'formatted-string', 'abc')).toBe(true);
-    expect(enhanced[1].filterFn(row, 'formatted-string', 'value: abc123')).toBe(true);
-    expect(enhanced[1].filterFn(row, 'formatted-string', 'missing')).toBe(false);
+    it('returns true when filterValue has no start and no end', () => {
+      expect(enhanced.filterFn({}, 'date', {})).toBe(true);
+    });
 
-    expect(enhanced[2].filterFn(row, 'formatted-object', 'raw-object')).toBe(true);
-    expect(enhanced[2].filterFn(row, 'formatted-object', 'rendered')).toBe(false);
+    it('returns false when raw value is missing', () => {
+      const row = { original: {} };
+      expect(
+        enhanced.filterFn(row, 'date', { start: new Date('2024-01-01') })
+      ).toBe(false);
+    });
 
-    expect(enhanced[3].filterFn(row, 'throws', 'safe-raw')).toBe(true);
-    expect(enhanced[3].filterFn(row, 'throws', 'missing')).toBe(false);
+    it('returns true when date is within range', () => {
+      const row = { original: { date: '2024-06-15' } };
+      expect(
+        enhanced.filterFn(row, 'date', {
+          start: new Date('2024-01-01'),
+          end: new Date('2024-12-31'),
+        })
+      ).toBe(true);
+    });
+
+    it('returns false when date is outside range', () => {
+      const row = { original: { date: '2023-01-01' } };
+      expect(
+        enhanced.filterFn(row, 'date', {
+          start: new Date('2024-01-01'),
+          end: new Date('2024-12-31'),
+        })
+      ).toBe(false);
+    });
+
+    it('supports ISO timestamp values', () => {
+      const row = { original: { date: '2024-06-15T12:00:00+00:00' } };
+      expect(
+        enhanced.filterFn(row, 'date', {
+          start: new Date('2024-01-01'),
+          end: new Date('2024-12-31'),
+        })
+      ).toBe(true);
+    });
   });
 
-  it('adds selection column only when selection type is provided', () => {
-    const baseColumns = [{ id: 'name' }];
+  describe('date filterFn', () => {
+    const col = {
+      id: 'dob',
+      accessorKey: 'dob',
+      meta: { filterVariant: 'date' },
+    };
+    const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
 
-    expect(addSelectionColumn(baseColumns, null)).toBe(baseColumns);
+    it('returns true when filterValue is null', () => {
+      expect(enhanced.filterFn({}, 'dob', null)).toBe(true);
+    });
 
-    const checkboxColumns = addSelectionColumn(baseColumns, 'checkbox');
-    const radioColumns = addSelectionColumn(baseColumns, 'radio');
+    it('returns false when raw value is missing', () => {
+      expect(
+        enhanced.filterFn({ original: {} }, 'dob', new Date('2024-06-15'))
+      ).toBe(false);
+    });
 
-    expect(checkboxColumns[0].id).toBe('select');
-    expect(radioColumns[0].id).toBe('select');
-    expect(checkboxColumns[1]).toBe(baseColumns[0]);
-    expect(radioColumns[1]).toBe(baseColumns[0]);
+    it('returns true when dates match', () => {
+      const row = { original: { dob: '2024-06-15' } };
+      expect(enhanced.filterFn(row, 'dob', new Date('2024-06-15'))).toBe(true);
+    });
+
+    it('returns false when dates do not match', () => {
+      const row = { original: { dob: '2024-06-15' } };
+      expect(enhanced.filterFn(row, 'dob', new Date('2024-06-16'))).toBe(false);
+    });
+  });
+
+  describe('slider filterFn', () => {
+    const col = { id: 'age', meta: { filterVariant: 'slider' } };
+    const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+
+    it('returns true when filterValue is null', () => {
+      expect(enhanced.filterFn({}, 'age', null)).toBe(true);
+    });
+
+    it('returns true when value is NaN', () => {
+      const row = { getValue: () => 'abc' };
+      expect(enhanced.filterFn(row, 'age', { min: 10, max: 50 })).toBe(true);
+    });
+
+    it('returns true when value is within range', () => {
+      const row = { getValue: () => 30 };
+      expect(enhanced.filterFn(row, 'age', { min: 10, max: 50 })).toBe(true);
+    });
+
+    it('returns false when value is outside range', () => {
+      const row = { getValue: () => 5 };
+      expect(enhanced.filterFn(row, 'age', { min: 10, max: 50 })).toBe(false);
+    });
+  });
+
+  describe('number filterFn', () => {
+    const col = { id: 'count', meta: { filterVariant: 'number' } };
+    const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+
+    it('returns true for empty filterValue', () => {
+      const row = { getValue: () => 5 };
+      expect(enhanced.filterFn(row, 'count', '')).toBe(true);
+      expect(enhanced.filterFn(row, 'count', null)).toBe(true);
+      expect(enhanced.filterFn(row, 'count', undefined)).toBe(true);
+    });
+
+    it('returns true when value matches', () => {
+      const row = { getValue: () => 42 };
+      expect(enhanced.filterFn(row, 'count', 42)).toBe(true);
+    });
+
+    it('returns false when value does not match', () => {
+      const row = { getValue: () => 10 };
+      expect(enhanced.filterFn(row, 'count', 42)).toBe(false);
+    });
+  });
+
+  describe('time filterFn', () => {
+    const col = { id: 'time', meta: { filterVariant: 'time' } };
+    const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+
+    it('returns true when filterValue is falsy', () => {
+      expect(enhanced.filterFn({ getValue: () => '09:30' }, 'time', '')).toBe(
+        true
+      );
+    });
+
+    it('returns false when raw is empty', () => {
+      expect(
+        enhanced.filterFn({ getValue: () => null }, 'time', '09:30 AM')
+      ).toBe(false);
+    });
+
+    it('returns true when raw is contained in filter', () => {
+      expect(
+        enhanced.filterFn({ getValue: () => '09:30' }, 'time', '09:30 AM')
+      ).toBe(true);
+    });
+
+    it('returns true when filter is contained in raw', () => {
+      expect(
+        enhanced.filterFn({ getValue: () => '09:30 AM' }, 'time', '09:30')
+      ).toBe(true);
+    });
+  });
+
+  describe('cell formatter filterFn', () => {
+    it('matches by raw value', () => {
+      const col = {
+        id: 'name',
+        cell: ({ getValue }) => getValue().toUpperCase(),
+      };
+      const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+      const row = { getValue: () => 'alice', original: {} };
+      expect(enhanced.filterFn(row, 'name', 'ali')).toBe(true);
+    });
+
+    it('matches by formatted string value', () => {
+      const col = {
+        id: 'name',
+        cell: ({ getValue }) => getValue().toUpperCase(),
+      };
+      const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+      const row = { getValue: () => 'alice', original: {} };
+      expect(enhanced.filterFn(row, 'name', 'ALICE')).toBe(true);
+    });
+
+    it('returns false when formatted value is a non-string object', () => {
+      const col = { id: 'name', cell: () => ({ type: 'jsx' }) };
+      const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+      const row = { getValue: () => 'xyz', original: {} };
+      expect(enhanced.filterFn(row, 'name', 'abc')).toBe(false);
+    });
+
+    it('returns false when neither raw nor formatted matches', () => {
+      const col = { id: 'name', cell: ({ getValue }) => getValue() };
+      const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+      const row = { getValue: () => 'alice', original: {} };
+      expect(enhanced.filterFn(row, 'name', 'zzz')).toBe(false);
+    });
+
+    it('handles cell formatter that throws', () => {
+      const col = {
+        id: 'name',
+        cell: () => {
+          throw new Error('boom');
+        },
+      };
+      const [enhanced] = enhanceColumnsWithSmartFiltering([col]);
+      const row = { getValue: () => 'alice', original: {} };
+      expect(enhanced.filterFn(row, 'name', 'zzz')).toBe(false);
+    });
   });
 });

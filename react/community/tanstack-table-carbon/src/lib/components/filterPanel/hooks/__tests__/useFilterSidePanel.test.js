@@ -2,88 +2,171 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { useFilterSidePanel } from '../useFilterSidePanel';
 
+const makeTable = () => ({
+  setColumnFilters: vi.fn(),
+  resetColumnFilters: vi.fn(),
+});
+
 describe('useFilterSidePanel', () => {
-  it('initializes closed and can open, close, and toggle the panel', () => {
-    const { result } = renderHook(() => useFilterSidePanel());
-
+  it('initialises with panel closed and empty applied custom filters', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
     expect(result.current.showFilterPanel).toBe(false);
+    expect(result.current.appliedCustomFilters).toEqual({});
+  });
 
-    act(() => {
-      result.current.openFilterPanel();
-    });
+  it('openFilterPanel sets showFilterPanel to true', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
+    act(() => result.current.openFilterPanel());
     expect(result.current.showFilterPanel).toBe(true);
+  });
 
-    act(() => {
-      result.current.toggleFilterPanel();
-    });
-    expect(result.current.showFilterPanel).toBe(false);
-
-    act(() => {
-      result.current.toggleFilterPanel();
-    });
-    expect(result.current.showFilterPanel).toBe(true);
-
-    act(() => {
-      result.current.closeFilterPanel();
-    });
+  it('closeFilterPanel sets showFilterPanel to false', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
+    act(() => result.current.openFilterPanel());
+    act(() => result.current.closeFilterPanel());
     expect(result.current.showFilterPanel).toBe(false);
   });
 
-  it('arrayFilterFn returns true for empty filters and matching values, false otherwise', () => {
-    const { result } = renderHook(() => useFilterSidePanel());
-
-    const row = {
-      getValue: vi.fn((columnId) => (columnId === 'status' ? 'active' : 'unknown')),
-    };
-
-    expect(result.current.arrayFilterFn(row, 'status', undefined)).toBe(true);
-    expect(result.current.arrayFilterFn(row, 'status', [])).toBe(true);
-    expect(result.current.arrayFilterFn(row, 'status', 'active')).toBe(true);
-    expect(result.current.arrayFilterFn(row, 'status', ['active', 'inactive'])).toBe(true);
-    expect(result.current.arrayFilterFn(row, 'status', ['inactive'])).toBe(false);
-    expect(row.getValue).toHaveBeenCalledWith('status');
+  it('toggleFilterPanel toggles the panel open and closed', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
+    act(() => result.current.toggleFilterPanel());
+    expect(result.current.showFilterPanel).toBe(true);
+    act(() => result.current.toggleFilterPanel());
+    expect(result.current.showFilterPanel).toBe(false);
   });
 
-  it('applies filters to table and invokes callback when table exists', () => {
-    const setColumnFilters = vi.fn();
+  it('applyFilters calls table.setColumnFilters with provided filters', () => {
+    const table = makeTable();
+    const { result } = renderHook(() => useFilterSidePanel(table));
+    const filters = [{ id: 'name', value: 'Alice' }];
+    act(() => result.current.applyFilters(filters));
+    expect(table.setColumnFilters).toHaveBeenCalledWith(filters);
+  });
+
+  it('applyFilters calls onColumnFiltersChange when provided', () => {
+    const table = makeTable();
     const onColumnFiltersChange = vi.fn();
-    const table = { setColumnFilters };
-
-    const { result } = renderHook(() => useFilterSidePanel(table, onColumnFiltersChange));
-    const filters = [{ id: 'status', value: 'active' }];
-
-    act(() => {
-      result.current.applyFilters(filters);
-    });
-
-    expect(setColumnFilters).toHaveBeenCalledWith(filters);
+    const { result } = renderHook(() =>
+      useFilterSidePanel(table, onColumnFiltersChange)
+    );
+    const filters = [{ id: 'name', value: 'Bob' }];
+    act(() => result.current.applyFilters(filters));
     expect(onColumnFiltersChange).toHaveBeenCalledWith(filters);
   });
 
-  it('clears filters on table and invokes callback with empty array when table exists', () => {
-    const resetColumnFilters = vi.fn();
+  it('applyFilters does nothing when table is null', () => {
+    const { result } = renderHook(() => useFilterSidePanel(null));
+    expect(() => act(() => result.current.applyFilters([]))).not.toThrow();
+  });
+
+  it('clearFilters calls table.resetColumnFilters', () => {
+    const table = makeTable();
+    const { result } = renderHook(() => useFilterSidePanel(table));
+    act(() => result.current.clearFilters());
+    expect(table.resetColumnFilters).toHaveBeenCalled();
+  });
+
+  it('clearFilters calls onColumnFiltersChange with empty array when provided', () => {
+    const table = makeTable();
     const onColumnFiltersChange = vi.fn();
-    const table = { resetColumnFilters };
-
-    const { result } = renderHook(() => useFilterSidePanel(table, onColumnFiltersChange));
-
-    act(() => {
-      result.current.clearFilters();
-    });
-
-    expect(resetColumnFilters).toHaveBeenCalled();
+    const { result } = renderHook(() =>
+      useFilterSidePanel(table, onColumnFiltersChange)
+    );
+    act(() => result.current.clearFilters());
     expect(onColumnFiltersChange).toHaveBeenCalledWith([]);
   });
 
-  it('does nothing for applyFilters and clearFilters when table is missing', () => {
-    const onColumnFiltersChange = vi.fn();
-    const { result } = renderHook(() => useFilterSidePanel(null, onColumnFiltersChange));
+  it('clearFilters does nothing when table is null', () => {
+    const { result } = renderHook(() => useFilterSidePanel(null));
+    expect(() => act(() => result.current.clearFilters())).not.toThrow();
+  });
 
-    act(() => {
-      result.current.applyFilters([{ id: 'status', value: 'active' }]);
-      result.current.clearFilters();
-    });
+  it('arrayFilterFn returns true for empty filterValue', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
+    const row = { getValue: () => 'active' };
+    expect(result.current.arrayFilterFn(row, 'status', [])).toBe(true);
+    expect(result.current.arrayFilterFn(row, 'status', null)).toBe(true);
+  });
 
-    expect(onColumnFiltersChange).not.toHaveBeenCalled();
+  it('arrayFilterFn returns true when cell value is in filter array', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
+    const row = { getValue: () => 'active' };
+    expect(
+      result.current.arrayFilterFn(row, 'status', ['active', 'pending'])
+    ).toBe(true);
+  });
+
+  it('arrayFilterFn returns false when cell value is not in filter array', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
+    const row = { getValue: () => 'inactive' };
+    expect(
+      result.current.arrayFilterFn(row, 'status', ['active', 'pending'])
+    ).toBe(false);
+  });
+
+  it('wrappedCustomFilters is null when no customFilters provided', () => {
+    const { result } = renderHook(() => useFilterSidePanel(makeTable()));
+    expect(result.current.wrappedCustomFilters).toBeNull();
+  });
+
+  it('wrappedCustomFilters.onApply updates appliedCustomFilters and calls original onApply', () => {
+    const onApply = vi.fn();
+    const customFilters = { onApply, onReset: vi.fn() };
+    const { result } = renderHook(() =>
+      useFilterSidePanel(makeTable(), null, customFilters)
+    );
+    act(() =>
+      result.current.wrappedCustomFilters.onApply({ name: 'Alice' }, {})
+    );
+    expect(result.current.appliedCustomFilters).toEqual({ name: 'Alice' });
+    expect(onApply).toHaveBeenCalledWith({ name: 'Alice' }, {});
+  });
+
+  it('wrappedCustomFilters.onReset clears appliedCustomFilters and calls original onReset', () => {
+    const onReset = vi.fn();
+    const customFilters = { onApply: vi.fn(), onReset };
+    const { result } = renderHook(() =>
+      useFilterSidePanel(makeTable(), null, customFilters)
+    );
+    act(() =>
+      result.current.wrappedCustomFilters.onApply({ name: 'Alice' }, {})
+    );
+    act(() => result.current.wrappedCustomFilters.onReset({}, {}));
+    expect(result.current.appliedCustomFilters).toEqual({});
+    expect(onReset).toHaveBeenCalledWith({}, {});
+  });
+
+  it('handleRemoveCustomFilter removes a key and calls customFilters.onApply with remainder', () => {
+    const onApply = vi.fn();
+    const customFilters = { onApply, onReset: vi.fn() };
+    const { result } = renderHook(() =>
+      useFilterSidePanel(makeTable(), null, customFilters)
+    );
+    act(() =>
+      result.current.wrappedCustomFilters.onApply(
+        { name: 'Alice', status: 'active' },
+        {}
+      )
+    );
+    act(() => result.current.handleRemoveCustomFilter('name'));
+    expect(result.current.appliedCustomFilters).toEqual({ status: 'active' });
+    expect(onApply).toHaveBeenLastCalledWith(
+      { status: 'active' },
+      { changedFilters: [] }
+    );
+  });
+
+  it('clearCustomFilters clears all and calls customFilters.onReset', () => {
+    const onReset = vi.fn();
+    const customFilters = { onApply: vi.fn(), onReset };
+    const { result } = renderHook(() =>
+      useFilterSidePanel(makeTable(), null, customFilters)
+    );
+    act(() =>
+      result.current.wrappedCustomFilters.onApply({ name: 'Alice' }, {})
+    );
+    act(() => result.current.clearCustomFilters());
+    expect(result.current.appliedCustomFilters).toEqual({});
+    expect(onReset).toHaveBeenCalledWith({}, { changedFilters: [] });
   });
 });

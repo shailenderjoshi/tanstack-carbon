@@ -18,6 +18,31 @@ export const useEditableCell = (tableContainerRef) => {
     captureCommandLeft.current = commandLeft;
   }, [commandLeft]);
 
+  // NOTE: Roving tabIndex entry point — keeps exactly one td with tabIndex=0
+  // so Tab from outside the table (e.g. from a checkbox column) can land on
+  // the first data cell and enter the grid. Only active when editable cells
+  // are present (this hook is only used then).
+  const ensureTabEntry = () => {
+    if (editingId) {
+      return;
+    }
+    const already =
+      tableContainerRef.current?.querySelector('td[tabindex="0"]');
+    if (already) {
+      return;
+    }
+    const firstCell = tableContainerRef.current?.querySelector(
+      'tbody tr:first-child td'
+    );
+    if (firstCell) {
+      firstCell.tabIndex = 0;
+    }
+  };
+
+  useEffect(() => {
+    ensureTabEntry();
+  });
+
   const removeActiveCell = () => {
     if (editingId) {
       return;
@@ -27,10 +52,13 @@ export const useEditableCell = (tableContainerRef) => {
       cell.tabIndex = -1;
     });
     document.activeElement?.blur();
+    // NOTE: Restore the tab entry point after clearing so Tab can re-enter the grid
+    ensureTabEntry();
   };
 
   const getActiveCell = () => {
-    const activeCellElement = tableContainerRef.current?.querySelector('td[tabindex="0"]');
+    const activeCellElement =
+      tableContainerRef.current?.querySelector('td[tabindex="0"]');
     return activeCellElement;
   };
 
@@ -40,6 +68,10 @@ export const useEditableCell = (tableContainerRef) => {
     }
     const activeCell = target.closest('td');
     if (activeCell) {
+      // NOTE: Roving tabIndex — move the single tabIndex=0 to the newly active cell
+      tableContainerRef.current?.querySelectorAll('td').forEach((cell) => {
+        cell.tabIndex = -1;
+      });
       activeCell.tabIndex = 0;
       activeCell.focus();
     }
@@ -69,6 +101,20 @@ export const useEditableCell = (tableContainerRef) => {
     }
 
     if (!activeCellElement) {
+      return;
+    }
+
+    // NOTE: If an overflow menu within this table is open, let Carbon handle arrow key navigation.
+    // Carbon renders the menu list via a portal into data-floating-menu-container, which is an
+    // ancestor of tableContainerRef — .closest() walks up to find it, then queries down.
+    const floatingMenuContainer =
+      tableContainerRef.current?.closest('[data-floating-menu-container]') ??
+      tableContainerRef.current;
+    if (
+      floatingMenuContainer?.querySelector(
+        'ul.cds--overflow-menu-options--open'
+      )
+    ) {
       return;
     }
 
@@ -118,6 +164,18 @@ export const useEditableCell = (tableContainerRef) => {
         return;
       }
       case 'Tab': {
+        // NOTE: If the next sibling td contains an overflow menu button, focus it directly
+        const nextSibling = activeCellElement.nextElementSibling;
+        const overflowBtn = nextSibling?.querySelector(
+          'button.cds--overflow-menu'
+        );
+        if (overflowBtn) {
+          event.preventDefault();
+          removeActiveCell();
+          overflowBtn.focus();
+          return;
+        }
+        // NOTE: Exit grid, ensureTabEntry restores the tab entry point for next time
         removeActiveCell();
         return;
       }

@@ -199,6 +199,26 @@ export const enhanceColumnsWithSmartFiltering = (columns) => {
       };
     }
 
+    // NOTE: Number filter — filterValue is the exact number (or empty string) from the
+    // NumberInput. When empty, all rows pass. When set, only rows whose numeric column
+    // value equals the entered number are shown.
+    if (filterVariant === 'number') {
+      return {
+        ...column,
+        filterFn: (row, columnId, filterValue) => {
+          if (
+            filterValue === '' ||
+            filterValue === undefined ||
+            filterValue === null
+          ) {
+            return true;
+          }
+          const raw = row.getValue(columnId);
+          return Number(raw) === Number(filterValue);
+        },
+      };
+    }
+
     // NOTE: Time filter — filterValue is a string like "09:30 AM".
     // Raw column value is typically "09:30" (HH:MM, no period).
     // Match if the raw value is contained within the filter string or vice-versa.
