@@ -34,7 +34,7 @@
       border-spacing: 0;
 
       // used to hide tooltip (options) when we hover on overflowMenu in table
-      :global(.cds--popover--open) {
+      :global(.cds--overflow-menu__wrapper .cds--popover--open) {
         :global(.cds--popover) {
           display: none;
         }

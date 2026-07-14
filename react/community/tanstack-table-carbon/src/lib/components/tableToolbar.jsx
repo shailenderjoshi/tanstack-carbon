@@ -460,7 +460,8 @@ const TableToolbar = ({
               shouldShowBatchActions={shouldShowBatchActions}
               totalSelected={selectedCount}
               onCancel={onCancelSelection}
-              totalCount={totalCount}>
+              totalCount={totalCount}
+              inert={!shouldShowBatchActions ? '' : undefined}>
               {renderBatchActions()}
             </TableBatchActions>
           )}

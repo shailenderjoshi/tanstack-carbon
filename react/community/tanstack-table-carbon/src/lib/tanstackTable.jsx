@@ -599,7 +599,11 @@ const TanstackTable = ({
 
   return (
     <LabelsProvider labels={labels}>
-      <div className={styles.tableWrapper} ref={wrapperRef}>
+      {/* data-floating-menu-container - used to open table overflowMenu inside table dom not on portal*/}
+      <div
+        className={styles.tableWrapper}
+        ref={wrapperRef}
+        data-floating-menu-container>
         <TableContainer>
           {/* Toolbar is always rendered; disabled when loading */}
           <TableToolbar {...toolbarProps} isLoading={isLoading} />

@@ -19,7 +19,9 @@ vi.mock('./filterPanel/customFilters', () => ({
 }));
 
 vi.mock('./filterPanel/simpleFilterField', () => ({
-  default: ({ columnData }) => <div data-testid={`simple-filter-${columnData.column.id}`} />,
+  default: ({ columnData }) => (
+    <div data-testid={`simple-filter-${columnData.column.id}`} />
+  ),
 }));
 
 vi.mock('../constants/constants', () => ({
@@ -54,8 +56,7 @@ vi.mock('@carbon/react', () => ({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={iconDescription || children}
-    >
+      aria-label={iconDescription || children}>
       {children}
     </button>
   ),
@@ -64,8 +65,7 @@ vi.mock('@carbon/react', () => ({
       <button
         type="button"
         aria-label={`${labelText}-change`}
-        onClick={() => onChange({ target: { value: 'abc' } })}
-      >
+        onClick={() => onChange({ target: { value: 'abc' } })}>
         change-search
       </button>
       <button type="button" onClick={onClear}>
@@ -152,7 +152,9 @@ describe('FilterSidePanel', () => {
     });
 
     // Suppress PropTypes warning for missing type in customFilterConfig
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
 
     const { rerender } = render(
       <FilterSidePanel
@@ -179,5 +181,20 @@ describe('FilterSidePanel', () => {
 
     warnSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+  });
+
+  it('sets inert when panel is closed and removes it when open', () => {
+    controllerMock.mockReturnValue(baseControllerValue());
+    filterableColumnsMock.mockReturnValue({ searchedColumns: [] });
+
+    const { rerender } = render(
+      <FilterSidePanel {...baseProps()} open={false} />
+    );
+
+    const panel = document.querySelector('[data-filter-panel="true"]');
+    expect(panel).toHaveAttribute('inert');
+
+    rerender(<FilterSidePanel {...baseProps()} open={true} />);
+    expect(panel).not.toHaveAttribute('inert');
   });
 });
